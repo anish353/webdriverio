@@ -1,15 +1,14 @@
 export default class APIUtils {
-    static FUNNEL_INSTRUMENTATION_URL = 'https://api.browserstack.com/sdk/v1/event'
-    static BROWSERSTACK_AUTOMATE_API_URL = 'https://api.browserstack.com'
-    static BROWSERSTACK_AA_API_URL = 'https://api.browserstack.com'
-    static BROWSERSTACK_PERCY_API_URL = 'https://api.browserstack.com'
-    static BROWSERSTACK_AUTOMATE_API_CLOUD_URL = 'https://api-cloud.browserstack.com'
-    static BROWSERSTACK_AA_API_CLOUD_URL = 'https://api-cloud.browserstack.com'
-    static APP_ALLY_ENDPOINT = 'https://app-accessibility.browserstack.com/automate'
-    static DATA_ENDPOINT = 'https://collector-observability.browserstack.com'
-    static UPLOAD_LOGS_ADDRESS = 'https://upload-observability.browserstack.com'
-    static EDS_URL = 'https://eds.browserstack.com'
-
+    static FUNNEL_INSTRUMENTATION_URL = 'https://api-preprod.bsstag.com/sdk/v1/event'
+    static BROWSERSTACK_AUTOMATE_API_URL = 'https://api-preprod.bsstag.com'
+    static BROWSERSTACK_AA_API_URL = 'https://api-preprod.bsstag.com'
+    static BROWSERSTACK_PERCY_API_URL = 'https://api-preprod.bsstag.com'
+    static BROWSERSTACK_AUTOMATE_API_CLOUD_URL = 'https://api-cloud-preprod.bsstag.com'
+    static BROWSERSTACK_AA_API_CLOUD_URL = 'https://api-cloud-preprod.bsstag.com'
+    static APP_ALLY_ENDPOINT = 'https://app-accessibility-preprod.bsstag.com/automate'
+    static DATA_ENDPOINT = 'https://collector-observability-preprod.bsstag.com'
+    static UPLOAD_LOGS_ADDRESS = 'https://upload-observability-preprod.bsstag.com'
+    static EDS_URL = 'https://eds-preprod.bsstag.com'
     static updateURLSForGRR(apis: GRRUrls) {
         this.FUNNEL_INSTRUMENTATION_URL = `${apis.automate.api}/sdk/v1/event`
         this.BROWSERSTACK_AUTOMATE_API_URL = apis.automate.api

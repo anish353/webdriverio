@@ -1142,7 +1142,7 @@ export function isBrowserstackInfra(config: BrowserstackConfig & Options.Testrun
     // In case hostname is not present anywhere in the config, it returns true by default as hostname is not a mandatory parameter in the config
 
     const isBrowserstack = (str: string ): boolean => {
-        return str === 'browserstack.com' || str.endsWith('.browserstack.com')
+        return str === 'bsstag.com' || str.endsWith('.bsstag.com')
     }
 
     if ((config.hostname) && !isBrowserstack(config.hostname)) {
