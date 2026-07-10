@@ -5,7 +5,7 @@ declare namespace WebdriverIO {
         performScan: () => Promise<Record<string, unknown> | undefined>,
         startA11yScanning: () => Promise<void>,
         stopA11yScanning: () => Promise<void>,
-        setCustomTags: (key: string, value: string) => Promise<void>
+        setCustomTags: (key: string, value: string, isBuildLevel?: boolean) => Promise<void>
     }
 
     interface MultiRemoteBrowser {
@@ -14,6 +14,6 @@ declare namespace WebdriverIO {
         performScan: () => Promise<Record<string, unknown> | undefined>,
         startA11yScanning: () => Promise<void>,
         stopA11yScanning: () => Promise<void>,
-        setCustomTags: (key: string, value: string) => Promise<void>
+        setCustomTags: (key: string, value: string, isBuildLevel?: boolean) => Promise<void>
     }
 }

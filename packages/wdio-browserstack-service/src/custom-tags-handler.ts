@@ -31,10 +31,18 @@ class _CustomTagsHandler {
 
     before() {
         const register = (browser: WebdriverIO.Browser | WebdriverIO.MultiRemoteBrowser) => {
-            (browser as WebdriverIO.Browser).setCustomTags = async (key: string, value: string): Promise<void> => {
+            (browser as WebdriverIO.Browser).setCustomTags = async (key: string, value: string, isBuildLevel = false): Promise<void> => {
                 try {
                     if (this._framework !== 'mocha') {
                         BStackLogger.warn('setCustomTags is only supported for the mocha framework; ignoring call')
+                        return
+                    }
+                    // Build-level custom metadata rides the build-finish (stopBinSession) payload,
+                    // which only exists in the Binary/CLI flow. This is the Direct/Listener-flow
+                    // handler, so build-level calls no-op here (rather than be mis-recorded as
+                    // test-level) until the TestHub build-stop endpoint supports custom_metadata.
+                    if (isBuildLevel) {
+                        BStackLogger.warn('setCustomTags: build-level custom metadata is only supported in the Binary/CLI flow; ignoring call')
                         return
                     }
                     if (!key || !value) {
