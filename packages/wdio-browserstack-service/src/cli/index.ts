@@ -6,7 +6,6 @@ import PerformanceTester from '../instrumentation/performance/performance-tester
 import { EVENTS as PerformanceEvents } from '../instrumentation/performance/constants.js'
 import { BStackLogger } from './cliLogger.js'
 import { GrpcClient } from './grpcClient.js'
-import { aggregateBuildLevelTagsFromTmp, getBuildTagsRunId } from '../customTags.js'
 import AutomateModule from './modules/automateModule.js'
 import TestHubModule from './modules/testHubModule.js'
 
@@ -359,13 +358,7 @@ export class BrowserstackCLI {
         this.logger.debug('stop: CLI stop triggered')
         try {
             if (this.isMainConnected) {
-                // Aggregate every worker's build-level custom-tag snapshot for this run and
-                // attach it to the build-finish payload. Runs once, in the main process.
-                const buildCustomMetadata = aggregateBuildLevelTagsFromTmp(getBuildTagsRunId())
-                const customMetadata = Object.keys(buildCustomMetadata).length > 0
-                    ? JSON.stringify(buildCustomMetadata)
-                    : undefined
-                const response = await GrpcClient.getInstance().stopBinSession(customMetadata)
+                const response = await GrpcClient.getInstance().stopBinSession()
                 BStackLogger.debug(`stop: stopBinSession response=${JSON.stringify(response)}`)
             }
 

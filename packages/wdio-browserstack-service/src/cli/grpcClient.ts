@@ -247,7 +247,7 @@ export class GrpcClient {
      * @returns {Promise<void>}
      * @private
      */
-    async stopBinSession(customMetadata?: string) {
+    async stopBinSession() {
         PerformanceTester.start(PERFORMANCE_SDK_EVENTS.EVENTS.SDK_CLI_ON_STOP)
         this.logger.debug('Stopping bin session')
 
@@ -262,9 +262,7 @@ export class GrpcClient {
 
             const clientWorkerId = CLIUtils.getClientWorkerId()
             const request = StopBinSessionRequestConstructor.create({
-                binSessionId: this.binSessionId,
-                // Build-level custom_metadata (JSON string), when any build-level tags were set.
-                ...(customMetadata ? { customMetadata } : {})
+                binSessionId: this.binSessionId
             })
             // Add clientWorkerId to request (proto field 500)
             ;(request as unknown as Record<string, unknown>).clientWorkerId = clientWorkerId

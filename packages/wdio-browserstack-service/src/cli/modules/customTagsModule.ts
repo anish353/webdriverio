@@ -11,7 +11,7 @@ import { TestFrameworkState } from '../states/testFrameworkState.js'
 import { TestFrameworkConstants } from '../frameworks/constants/testFrameworkConstants.js'
 import { CLIUtils } from '../cliUtils.js'
 import WdioMochaTestFramework from '../frameworks/wdioMochaTestFramework.js'
-import { mergeIntoTags, parseCommaSeparatedValues, extractCaseIdsFromTitle, resolveTitleTagConfig, buildLevelTagStore } from '../../customTags.js'
+import { mergeIntoTags, parseCommaSeparatedValues, extractCaseIdsFromTitle, resolveTitleTagConfig } from '../../customTags.js'
 import type { CustomMetadata } from '../../customTags.js'
 
 /**
@@ -70,25 +70,10 @@ export default class CustomTagsModule extends BaseModule {
                 return
             }
 
-            (browser as WebdriverIO.Browser).setCustomTags = async (key: string, value: string, isBuildLevel = false): Promise<void> => {
+            (browser as WebdriverIO.Browser).setCustomTags = async (key: string, value: string): Promise<void> => {
                 try {
                     if (!key || !value) {
                         this.logger.warn('setCustomTags: key and value are required; ignoring call')
-                        return
-                    }
-
-                    // Build-level: accumulate into the process-local build store and persist a
-                    // snapshot for the main process to aggregate onto the build-finish
-                    // (stopBinSession) payload. Build-level tags are NOT attached to the per-test
-                    // instance and require no active test context.
-                    if (isBuildLevel) {
-                        const added = buildLevelTagStore.add(key, value)
-                        if (!added) {
-                            this.logger.warn(`setCustomTags: no usable values parsed from "${value}"; ignoring call`)
-                            return
-                        }
-                        await buildLevelTagStore.writeSnapshot()
-                        this.logger.debug(`setCustomTags(build): merged key=${key} value="${value}"`)
                         return
                     }
 

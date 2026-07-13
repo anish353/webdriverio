@@ -12,10 +12,6 @@
  * node-agent quote-aware tokenizer (helper.js `parseCommaSeparatedValues`).
  */
 
-import os from 'node:os'
-import fs from 'node:fs'
-import path from 'node:path'
-
 export interface CustomMetadataEntry {
     field_type: 'multi_dropdown'
     values: string[]
@@ -134,127 +130,6 @@ export class CustomTagAccumulator {
             this.store.delete(testUuid)
         }
     }
-}
-
-/* --------------------------------------------------------------------------
- * Build-level custom metadata.
- *
- * Unlike test-level tags (which ride the per-test event_json), build-level tags are
- * attached ONCE to the build-finish payload (stopBinSession.custom_metadata). WDIO
- * runs one process per spec file with NO shared memory, so each worker accumulates
- * its own build-level tags in-process and persists a FULL snapshot to a shared temp
- * file; the main process aggregates every worker's snapshot at build finish. Mirrors
- * node-agent's customTagManager build-level mechanism (temp-file snapshot + aggregate).
- * ------------------------------------------------------------------------ */
-
-/** Env var carrying the run-scope build id — set in BrowserstackCLI.loadModules() in every process. */
-const BUILD_TAGS_RUN_ID_ENV = 'BROWSERSTACK_TESTHUB_UUID'
-const BUILD_TAGS_FILE_PREFIX = 'bstack_build_tags_'
-/** Skip + drop snapshots older than this — guards a reused run id from picking up a prior run's leftovers. */
-const BUILD_TAGS_MAX_AGE_MS = 2 * 60 * 60 * 1000
-
-/** Run-scope id used to name this process's snapshot file; null when unavailable (build-level tags then degrade gracefully). */
-export function getBuildTagsRunId(): string | null {
-    const runId = process.env[BUILD_TAGS_RUN_ID_ENV]
-    return runId && runId !== 'null' ? runId : null
-}
-
-function getBuildTagsFilePath(runId: string): string {
-    return path.join(os.tmpdir(), `${BUILD_TAGS_FILE_PREFIX}${runId}_${process.pid}.json`)
-}
-
-/**
- * Process-local build-level custom_metadata store. Accumulates
- * setCustomTags(key, value, true) calls and persists a full snapshot for the main
- * process to aggregate. Never throws — a failed snapshot must not break the user's test.
- */
-export class BuildLevelTagStore {
-    private store: CustomMetadata = {}
-
-    /** Merge one (key, value) into the build store; value is quote-aware comma-split. Returns false when nothing usable. */
-    add(key: string, value: string): boolean {
-        if (!key) {
-            return false
-        }
-        const values = parseCommaSeparatedValues(value)
-        if (values.length === 0) {
-            return false
-        }
-        mergeIntoTags(this.store, key, values)
-        return true
-    }
-
-    get(): CustomMetadata {
-        return this.store
-    }
-
-    /**
-     * Persist a FULL snapshot of this process's build-level tags to the shared temp
-     * file (keyed on runId + pid). Full-snapshot, not diff, so aggregation is an
-     * order-independent union. No-op when the run id is unavailable or the store is
-     * empty. Never throws.
-     */
-    async writeSnapshot(): Promise<void> {
-        try {
-            const runId = getBuildTagsRunId()
-            if (!runId || Object.keys(this.store).length === 0) {
-                return
-            }
-            await fs.promises.writeFile(getBuildTagsFilePath(runId), JSON.stringify(this.store))
-        } catch {
-            // graceful degradation — snapshot failure must not surface to the user's test
-        }
-    }
-}
-
-/** Singleton build-level store for the current process. */
-export const buildLevelTagStore = new BuildLevelTagStore()
-
-/**
- * Aggregate every worker's build-level snapshot for this run into one custom_metadata
- * map, unlinking each file as it goes (best-effort). Snapshots older than
- * BUILD_TAGS_MAX_AGE_MS are skipped + unlinked. Called once, in the main process, at
- * build finish. Never throws; returns {} on any failure.
- */
-export function aggregateBuildLevelTagsFromTmp(runId: string | null): CustomMetadata {
-    const merged: CustomMetadata = {}
-    if (!runId) {
-        return merged
-    }
-    try {
-        const dir = os.tmpdir()
-        const prefix = `${BUILD_TAGS_FILE_PREFIX}${runId}_`
-        const now = Date.now()
-        for (const name of fs.readdirSync(dir)) {
-            if (!name.startsWith(prefix) || !name.endsWith('.json')) {
-                continue
-            }
-            const filePath = path.join(dir, name)
-            try {
-                const stat = fs.statSync(filePath)
-                if (now - stat.mtimeMs <= BUILD_TAGS_MAX_AGE_MS) {
-                    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as CustomMetadata
-                    for (const [key, entry] of Object.entries(parsed || {})) {
-                        if (entry && Array.isArray(entry.values)) {
-                            mergeIntoTags(merged, key, entry.values)
-                        }
-                    }
-                }
-                // else: stale snapshot — skip merge (still unlinked in finally)
-            } catch {
-                // skip unreadable / corrupt snapshot
-            } finally {
-                try {
-                    fs.unlinkSync(filePath)
-                } catch {
-                    // best-effort cleanup
-                }
-            }
-        }
-    } catch {
-        // tmpdir unreadable — return whatever merged so far
-    }
-    return merged
 }
 
 /* --------------------------------------------------------------------------
