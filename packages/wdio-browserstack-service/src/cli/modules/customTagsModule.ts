@@ -34,6 +34,15 @@ export default class CustomTagsModule extends BaseModule {
     name: string
     static MODULE_NAME = 'CustomTagsModule'
 
+    /**
+     * Tags set before a per-test context exists — e.g. from a `beforeEach` hook, which
+     * WDIO runs BEFORE `beforeTest` tracks the test instance. Buffered here and flushed
+     * into the test at test start (onBeforeTest), then reset per-test, so hook-set tags
+     * land on the test (parity with Java @Before). Process-local (one module per worker)
+     * and Mocha runs tests serially, so a plain object is safe.
+     */
+    private pendingTestLevelTags: CustomMetadata = {}
+
     constructor() {
         super()
         this.name = 'CustomTagsModule'
@@ -83,15 +92,20 @@ export default class CustomTagsModule extends BaseModule {
                         return
                     }
 
-                    const testInstance: TestFrameworkInstance = TestFramework.getTrackedInstance()
-                    if (!testInstance) {
-                        this.logger.warn('setCustomTags called outside of a resolvable test context; ignoring')
-                        return
-                    }
-
                     const values = parseCommaSeparatedValues(value)
                     if (values.length === 0) {
                         this.logger.warn(`setCustomTags: no usable values parsed from "${value}"; ignoring call`)
+                        return
+                    }
+
+                    const testInstance: TestFrameworkInstance = TestFramework.getTrackedInstance()
+                    if (!testInstance) {
+                        // No live per-test context yet — happens when setCustomTags is called from a
+                        // beforeEach hook, which WDIO runs BEFORE beforeTest establishes the tracked
+                        // test instance. Buffer the tag and flush it into the test at test start
+                        // (onBeforeTest) rather than dropping it, so hook-set tags land on the test.
+                        mergeIntoTags(this.pendingTestLevelTags, key, values)
+                        this.logger.debug(`setCustomTags: buffered pre-test tag key=${key} values=${JSON.stringify(values)} (no active test context yet; will flush at test start)`)
                         return
                     }
 
@@ -117,15 +131,37 @@ export default class CustomTagsModule extends BaseModule {
     }
 
     /**
-     * Opt-in title-based tagging (TestRail-style): at each test start, derive
-     * Test-Case-IDs from the test title and merge them into the tracked instance's
-     * custom_metadata under the configured key — via the SAME merge path as explicit
-     * setCustomTags, so title-derived and programmatic tags union. Gated by
-     * resolveTitleTagConfig() (env-published at beforeSession); a safe no-op when
-     * disabled or nothing matches.
+     * At each test start (TEST/PRE — after beforeTest tracks the instance), do two things
+     * via the SAME merge path so everything unions on one test:
+     *   1. Flush any tags buffered before the test had a context (e.g. set in a beforeEach
+     *      hook — see the setCustomTags closure), then reset the buffer for the next test.
+     *   2. Opt-in title-based tagging (TestRail-style): derive Test-Case-IDs from the test
+     *      title. Gated by resolveTitleTagConfig() (env-published at beforeSession); a safe
+     *      no-op when disabled or nothing matches.
      */
     async onBeforeTest(args: Record<string, unknown>) {
         try {
+            // Prefer the tracked instance (the SAME one the explicit setCustomTags closure
+            // reads/writes) so buffered, title-derived and programmatic tags all union.
+            const testInstance = TestFramework.getTrackedInstance() || (args.instance as TestFrameworkInstance)
+            if (!testInstance) {
+                return
+            }
+
+            // (1) Flush tags buffered before this test had a context (e.g. from beforeEach).
+            if (Object.keys(this.pendingTestLevelTags).length > 0) {
+                const buffered = (TestFramework.getState(testInstance, TestFrameworkConstants.KEY_CUSTOM_TAGS) as CustomMetadata) || {}
+                for (const [k, entry] of Object.entries(this.pendingTestLevelTags)) {
+                    mergeIntoTags(buffered, k, entry.values)
+                }
+                testInstance.updateMultipleEntries({
+                    [TestFrameworkConstants.KEY_CUSTOM_TAGS]: buffered
+                })
+                this.logger.debug(`setCustomTags: flushed buffered pre-test tags ${JSON.stringify(Object.keys(this.pendingTestLevelTags))} into test`)
+                this.pendingTestLevelTags = {}
+            }
+
+            // (2) Opt-in title-based tagging.
             const titleCfg = resolveTitleTagConfig()
             if (!titleCfg) {
                 return
@@ -133,12 +169,6 @@ export default class CustomTagsModule extends BaseModule {
             const test = args.test as { title?: string } | undefined
             const ids = extractCaseIdsFromTitle(test?.title, titleCfg.pattern)
             if (ids.length === 0) {
-                return
-            }
-            // Prefer the tracked instance (the SAME one the explicit setCustomTags
-            // closure reads/writes) so title-derived and programmatic tags union.
-            const testInstance = TestFramework.getTrackedInstance() || (args.instance as TestFrameworkInstance)
-            if (!testInstance) {
                 return
             }
             const existing = (TestFramework.getState(testInstance, TestFrameworkConstants.KEY_CUSTOM_TAGS) as CustomMetadata) || {}
