@@ -11,7 +11,7 @@ import { TestFrameworkState } from '../states/testFrameworkState.js'
 import { TestFrameworkConstants } from '../frameworks/constants/testFrameworkConstants.js'
 import { CLIUtils } from '../cliUtils.js'
 import WdioMochaTestFramework from '../frameworks/wdioMochaTestFramework.js'
-import { mergeIntoTags, parseCommaSeparatedValues, extractCaseIdsFromTitle, resolveTitleTagConfig } from '../../customTags.js'
+import { mergeIntoTags, parseCommaSeparatedValues, extractCaseIdsFromTitle, resolveTitleTagConfig, getCurrentMochaHookWindow } from '../../customTags.js'
 import type { CustomMetadata } from '../../customTags.js'
 
 /**
@@ -83,14 +83,20 @@ export default class CustomTagsModule extends BaseModule {
                         return
                     }
 
+                    // Route by the open Mocha hook window (recorded by the service layer —
+                    // the CLI framework never sees Mocha's beforeEach/afterEach):
+                    //   - before-each / before-all → the tag belongs to the UPCOMING test.
+                    //     The tracked instance is absent (first test) or still the PREVIOUS
+                    //     test here, so buffer and flush at test start (onBeforeTest).
+                    //   - after-each / after-all / in-test → the CURRENT tracked test. Its
+                    //     TestRunFinished send is deferred past the after-each window
+                    //     (TestHubModule), so late merges still make the payload.
+                    const hookWindow = getCurrentMochaHookWindow()
+                    const isPreTestWindow = hookWindow === 'before_each' || hookWindow === 'before_all'
                     const testInstance: TestFrameworkInstance = TestFramework.getTrackedInstance()
-                    if (!testInstance) {
-                        // No live per-test context yet — happens when setCustomTags is called from a
-                        // beforeEach hook, which WDIO runs BEFORE beforeTest establishes the tracked
-                        // test instance. Buffer the tag and flush it into the test at test start
-                        // (onBeforeTest) rather than dropping it, so hook-set tags land on the test.
+                    if (!testInstance || isPreTestWindow) {
                         mergeIntoTags(this.pendingTestLevelTags, key, values)
-                        this.logger.debug(`setCustomTags: buffered pre-test tag key=${key} values=${JSON.stringify(values)} (no active test context yet; will flush at test start)`)
+                        this.logger.debug(`setCustomTags: buffered pre-test tag key=${key} values=${JSON.stringify(values)} (window=${hookWindow ?? 'none'}; will flush at test start)`)
                         return
                     }
 
